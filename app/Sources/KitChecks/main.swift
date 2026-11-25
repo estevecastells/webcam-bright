@@ -1,6 +1,7 @@
 // Checks for the lever logic and the settings: `swift run KitChecks`. Exits non-zero on failure.
 // No camera needed: a simple model of the C920 stands in for it.
 
+import CryptoKit
 import Foundation
 import WebcamBrightKit
 
@@ -187,6 +188,53 @@ do {
           "stored values are clamped")
     check(clamped.powerLineHz == Settings().powerLineHz, "an odd mains frequency falls back to the default")
     check(Settings().targetLuma == 115 && Settings().dayContrast == 100, "defaults are the measured values")
+}
+
+// MARK: Updates: versions, release JSON, signatures and checksums
+
+do {
+    check(Version("v0.10.0")! > Version("0.9.9")! && Version("1.0")! == Version("1.0.0")! && Version("0.1.0")! < Version("0.1.1")!,
+          "version ordering")
+    check(Version("v1.x") == nil && Version("") == nil && Version("1..2") == nil && Version("1.") == nil, "invalid versions rejected")
+    let json = #"""
+    {"tag_name": "v0.3.0", "html_url": "https://github.com/estevecastells/webcam-bright/releases/tag/v0.3.0",
+     "draft": false, "prerelease": false, "body": "Notes",
+     "assets": [
+      {"name": "WebcamBright-macos-arm64.zip", "browser_download_url": "https://github.com/estevecastells/webcam-bright/releases/download/v0.3.0/WebcamBright-macos-arm64.zip", "size": 1},
+      {"name": "SHA256SUMS", "browser_download_url": "https://github.com/estevecastells/webcam-bright/releases/download/v0.3.0/SHA256SUMS", "size": 1}
+     ]}
+    """#
+    let release = try? Release.decode(Data(json.utf8))
+    check(release?.version == Version("0.3.0") && release?.draft == false && release?.asset(UpdateConfig.appAsset) != nil
+          && release?.asset("nope") == nil, "decodes a GitHub release")
+    check(!UpdateConfig.publicKeys.isEmpty && (try? ReleaseVerifier(publicKeysBase64: UpdateConfig.publicKeys)) != nil,
+          "embedded public keys are valid")
+
+    let testKey = Curve25519.Signing.PrivateKey()
+    let payload = Data("abc123  WebcamBright-macos-arm64.zip\n".utf8)
+    let verifier = try! ReleaseVerifier(publicKeyBase64: testKey.publicKey.rawRepresentation.base64EncodedString())
+    let goodSig = Data(try! testKey.signature(for: payload).base64EncodedString().utf8)
+    check((try? verifier.verifiedSums(sums: payload, signature: goodSig))?["WebcamBright-macos-arm64.zip"] == "abc123",
+          "valid signature accepted")
+    check((try? verifier.verifiedSums(sums: payload + Data("x".utf8), signature: goodSig)) == nil, "tampered sums rejected")
+    let otherSig = Data(try! Curve25519.Signing.PrivateKey().signature(for: payload).base64EncodedString().utf8)
+    check((try? verifier.verifiedSums(sums: payload, signature: otherSig)) == nil, "signature from another key rejected")
+    let rotated = try! ReleaseVerifier(publicKeysBase64: [
+        Curve25519.Signing.PrivateKey().publicKey.rawRepresentation.base64EncodedString(),
+        testKey.publicKey.rawRepresentation.base64EncodedString(),
+    ])
+    check((try? rotated.verifiedSums(sums: payload, signature: goodSig)) != nil, "signature from any listed key accepted")
+    check((try? ReleaseVerifier(publicKeysBase64: [])) == nil, "an empty key list is refused")
+    check(ReleaseVerifier.parseSums("ABC  *a.zip\nbad line\n")["a.zip"] == "abc", "parses binary-mode shasum lines")
+
+    let tmpFile = FileManager.default.temporaryDirectory.appendingPathComponent("kitchecks-\(getpid()).bin")
+    try! Data("hello".utf8).write(to: tmpFile)
+    defer { try? FileManager.default.removeItem(at: tmpFile) }
+    let helloHex = "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824"
+    check((try? ReleaseVerifier.check(tmpFile, named: "f", in: ["f": helloHex])) != nil, "checksum match")
+    check((try? ReleaseVerifier.check(tmpFile, named: "f", in: ["f": String(repeating: "0", count: 64)])) == nil,
+          "checksum mismatch rejected")
+    check((try? ReleaseVerifier.check(tmpFile, named: "g", in: ["f": helloHex])) == nil, "missing checksum entry rejected")
 }
 
 print(failures == 0 ? "All \(passed) checks passed" : "\(failures) of \(passed + failures) checks failed")

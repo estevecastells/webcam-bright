@@ -25,23 +25,31 @@ public struct MenuContent: View {
                 Text(error).font(.caption).foregroundStyle(.red).fixedSize(horizontal: false, vertical: true)
             }
 
+            UpdateRow(updates: model.updates, inCall: model.status.state == .inCall)
+
             Divider()
-            HStack {
-                Toggle("Open at login", isOn: Binding(get: { model.openAtLogin }, set: { model.setOpenAtLogin($0) }))
-                    .toggleStyle(.checkbox)
-                if model.loginItemNeedsApproval {
-                    Button("Approve…") { model.openLoginItemSettings() }
-                        .buttonStyle(.link)
-                        .font(.caption)
-                        .help("macOS needs you to allow WebcamBright in Login Items")
+            VStack(alignment: .leading, spacing: 4) {
+                HStack {
+                    Toggle("Open at login", isOn: Binding(get: { model.openAtLogin }, set: { model.setOpenAtLogin($0) }))
+                        .toggleStyle(.checkbox)
+                    if model.loginItemNeedsApproval {
+                        Button("Approve…") { model.openLoginItemSettings() }
+                            .buttonStyle(.link)
+                            .font(.caption)
+                            .help("macOS needs you to allow WebcamBright in Login Items")
+                    }
                 }
+                AutoUpdateToggle(updates: model.updates)
             }
             .font(.callout)
             HStack {
                 Button("Log") { model.openLog() }
                     .help("Every adjustment, with the face brightness before it")
                 Spacer()
-                Link("GitHub", destination: URL(string: "https://github.com/estevecastells/webcam-bright")!)
+                Button("Check for Updates") { Task { await model.updates.check(userInitiated: true) } }
+                    .disabled(model.updates.state == .checking)
+                Spacer()
+                Link("GitHub", destination: URL(string: "https://github.com/\(UpdateConfig.repo)")!)
                 Spacer()
                 Button("Quit") { NSApplication.shared.terminate(nil) }
                     .help("The camera goes back to its own auto exposure")
@@ -264,5 +272,56 @@ private struct SettingsView: View {
     private func load() {
         target = model.settings.targetLuma
         contrast = Double(model.settings.dayContrast)
+    }
+}
+
+// MARK: - Updates
+
+@MainActor
+private struct AutoUpdateToggle: View {
+    let updates: Updates
+    @State private var on = true
+
+    var body: some View {
+        Toggle("Install updates automatically", isOn: Binding(get: { on }, set: { on = $0; updates.autoInstall = $0 }))
+            .toggleStyle(.checkbox)
+            .help("Never during a call: an update waits for the call to end")
+            .onAppear { on = updates.autoInstall }
+    }
+}
+
+@MainActor
+private struct UpdateRow: View {
+    let updates: Updates
+    let inCall: Bool
+
+    var body: some View {
+        switch updates.state {
+        case .idle:
+            EmptyView()
+        case .checking:
+            Label("Checking for updates…", systemImage: "arrow.triangle.2.circlepath").font(.caption).foregroundStyle(.secondary)
+        case .upToDate:
+            Label("WebcamBright \(Updates.currentVersion) is up to date", systemImage: "checkmark.circle")
+                .font(.caption).foregroundStyle(.secondary)
+        case let .available(version, notes):
+            HStack {
+                Label("Version \(version) is available", systemImage: "arrow.down.circle.fill").font(.callout)
+                Spacer()
+                Link("What's new", destination: notes).font(.caption)
+                Button("Update") { Task { await updates.install() } }
+                    .controlSize(.small)
+                    .disabled(inCall)
+                    .help(inCall ? "After the call: updating restarts WebcamBright" : "Download, verify and restart")
+            }
+        case let .installing(step):
+            HStack(spacing: 6) {
+                ProgressView().controlSize(.small)
+                Text(step).font(.caption).foregroundStyle(.secondary)
+            }
+        case let .failed(message):
+            Label(message, systemImage: "exclamationmark.triangle").font(.caption).foregroundStyle(.orange)
+                .fixedSize(horizontal: false, vertical: true)
+        }
     }
 }

@@ -7,17 +7,29 @@
 <p><strong>Auto exposure for your face, not for the window behind you.</strong><br/>
 A small menu bar app for macOS that keeps a USB webcam exposed for your face during every call.</p>
 
+<a href="https://github.com/estevecastells/webcam-bright/releases/latest/download/WebcamBright-macos-arm64.zip"><img src="https://img.shields.io/badge/Download_for_Mac-Apple_Silicon-0A84FF?style=for-the-badge&logo=apple&logoColor=white" alt="Download WebcamBright for Mac (Apple Silicon)" height="44"/></a>
+
 <p>
+<a href="https://github.com/estevecastells/webcam-bright/releases/latest"><img src="https://img.shields.io/github/v/release/estevecastells/webcam-bright?label=latest&style=flat-square" alt="Latest release"/></a>
 <img src="https://img.shields.io/badge/macOS-14%2B-555?style=flat-square&logo=apple" alt="macOS 14 or later"/>
+<a href="https://github.com/estevecastells/webcam-bright/actions/workflows/ci.yml"><img src="https://github.com/estevecastells/webcam-bright/actions/workflows/ci.yml/badge.svg" alt="CI"/></a>
 <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue?style=flat-square" alt="MIT license"/></a>
 </p>
 
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/images/panel-dark.png">
-  <img src="docs/images/panel-light.png" width="320" alt="The WebcamBright menu during a call: face brightness 117 against a target of 115, the camera's exposure, gain and contrast, an On / Pause 1 h / Off switch, and sliders for face brightness and daylight contrast">
-</picture>
+**Or install in one line** (no password, checksum verified):
 
 </div>
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/estevecastells/webcam-bright/main/scripts/get.sh | bash
+```
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/images/panel-dark.png">
+    <img src="docs/images/panel-light.png" width="320" alt="The WebcamBright menu during a call: face brightness 117 against a target of 115, the camera's exposure, gain and contrast, an On / Pause 1 h / Off switch, and sliders for face brightness and daylight contrast">
+  </picture>
+</p>
 
 ## Why
 
@@ -33,12 +45,25 @@ Fixed manual settings don't last, because the light changes through the day. Web
 - **Learns as it goes.** How much a step of gain brightens your face depends on the light, so the step size is learned live.
 - **Shows what it's doing.** The menu shows your face brightness against the target and what the camera is set to, and the log records every adjustment.
 - **Gives the camera back.** Pause it for an hour, turn it off or quit, and the camera goes back to its own auto exposure. After a call, the camera is free again within about 10 seconds.
+- **Updates itself, never during a call.** New releases are checked, signature-verified and installed once the call is over. You can turn this off.
 
 Tested on an Apple silicon Mac (M5 Pro) with macOS 27 and a Logitech C920. Other UVC webcams should work, but their exposure steps and useful gain range need measuring first: see [Other cameras](#other-cameras).
 
 ## Install
 
-You need macOS 14 or later and Apple's command line tools. No full Xcode, no third-party dependencies.
+On an Apple silicon Mac with macOS 14 or later, run the one-line installer above. It downloads the latest release and checks its checksum, and also its build attestation if you have the GitHub CLI. Then it installs **WebcamBright.app** into `/Applications` and opens it. It appears in the menu bar and adds itself to Login Items, so it starts with your Mac.
+
+Or [download the app](https://github.com/estevecastells/webcam-bright/releases/latest/download/WebcamBright-macos-arm64.zip), unzip it and move it to Applications. It is signed but not notarized, so the first time macOS may refuse to open it: go to **System Settings → Privacy & Security** and click **Open Anyway**. The installer doesn't need this, because `curl` downloads don't get the quarantine flag.
+
+The first time a call turns the camera on, macOS asks whether WebcamBright may use the camera. Allow it. If the prompt doesn't show, the switch is in **System Settings → Privacy & Security → Camera**. Releases are all signed with the same certificate, so the permission survives updates.
+
+**Uninstall:** quit WebcamBright from its menu, which hands the camera back to its own auto exposure, and move the app to the Trash. From a clone of this repository, `make uninstall` does both and also removes the login item.
+
+**Upgrading from the background helper:** earlier versions ran as a LaunchAgent. The installer removes that agent for you. It stops if it finds a WebcamBright helper under another label, because two copies would fight over the camera.
+
+### From source
+
+You need Apple's command line tools. No full Xcode, no third-party dependencies. This is also the way to run it on an Intel Mac.
 
 ```sh
 xcode-select --install          # only if you don't have the command line tools yet
@@ -47,13 +72,7 @@ cd webcam-bright
 make install
 ```
 
-`make install` builds the app, signs it ad hoc, copies it to `/Applications` (or `~/Applications` if `/Applications` isn't writable) and opens it. It appears in the menu bar and adds itself to Login Items, so it starts with your Mac.
-
-macOS asks once whether WebcamBright may use the camera. Allow it. If the prompt doesn't show, the switch is in **System Settings → Privacy & Security → Camera**. The signature changes with every build, so after a rebuild macOS may ask again.
-
-**Uninstall:** `make uninstall` quits the app, which hands the camera back to its own auto exposure, and removes it and its login item.
-
-**Upgrading from the background helper:** earlier versions ran as a LaunchAgent. `make install` removes that agent for you. It stops if it finds a WebcamBright helper under another label, because two copies would fight over the camera.
+`make install` builds the app, signs it and copies it to `/Applications` (or `~/Applications` if `/Applications` isn't writable), then opens it. Without a signing certificate it is signed ad hoc, and the signature changes with every build, so macOS asks for the camera again after each rebuild. `scripts/make-signing-cert.sh` creates a local certificate that avoids this.
 
 ## The menu
 
@@ -64,6 +83,7 @@ macOS asks once whether WebcamBright may use the camera. Allow it. If the prompt
 | **Face brightness** | How bright your skin should be, 0 to 255. 115 looked right in testing; raise it if you look dim, lower it if you look washed out. |
 | **Daylight contrast** | Lower softens the shadows on your face. 100 by default, below the camera's own 128. In a room lit only by the screen it rises to 140 on its own. |
 | **Anti-flicker** | Match your mains: 50 Hz in Europe and most of the world, 60 Hz in most of the Americas. The default follows your Mac's region. |
+| **Install updates automatically** | On by default. WebcamBright checks GitHub for a new release 15 seconds after it starts and then every 6 hours, and installs it after the call if there is one. Off, the menu shows the update and waits for you. |
 | **Log** | Opens `~/Library/Logs/webcam-bright.log`. Each adjustment is logged with the face brightness before it and the camera settings after it. |
 
 **Quit** hands the camera back to its own auto exposure, so it isn't left on fixed settings for a call while WebcamBright isn't running.
@@ -72,7 +92,7 @@ To follow the log from a terminal: `make log`.
 
 ## Command line
 
-`build/uvcctl` reads and changes the camera's controls directly, which is handy for trying values by hand:
+`uvcctl` reads and changes the camera's controls directly, which is handy for trying values by hand. It is inside the app, at `/Applications/WebcamBright.app/Contents/Resources/uvcctl`, and at `build/uvcctl` after a build from source:
 
 ```sh
 build/uvcctl list                         # every control: current, min, max, default

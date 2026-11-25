@@ -1,10 +1,12 @@
 #!/bin/bash
 # Builds the menu bar app and the uvcctl tool with the Command Line Tools alone (no Xcode project).
 #
-#   scripts/build-app.sh   → build/WebcamBright.app and build/uvcctl
+#   scripts/build-app.sh   → build/WebcamBright.app (uvcctl inside) and build/uvcctl
 #
-# The app is signed ad hoc. macOS ties camera access to the signature, so after a rebuild it may
-# ask for camera access again.
+# Signed with WEBCAMBRIGHT_SIGN_IDENTITY, else "WebcamBright Release Signing" (the identity releases
+# are signed with, docs/RELEASING.md), else "WebcamBright Local Signing" (scripts/make-signing-cert.sh),
+# else ad hoc. macOS ties camera access to the signature: a stable identity keeps it across rebuilds
+# and updates, while an ad-hoc signature changes with every build, so macOS may ask again.
 set -euo pipefail
 
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -22,7 +24,7 @@ rm -rf "$app"
 mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources"
 cp "$bin/WebcamBright" "$app/Contents/MacOS/WebcamBright"
 cp app/Resources/AppIcon.icns "$app/Contents/Resources/AppIcon.icns"
-cp "$bin/uvcctl" build/uvcctl
+cp "$bin/uvcctl" "$app/Contents/Resources/uvcctl"
 
 cat > "$app/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
@@ -46,5 +48,15 @@ cat > "$app/Contents/Info.plist" <<PLIST
 </plist>
 PLIST
 
-codesign --force --sign - "$app" >/dev/null
-echo "==> Done: $root/$app and $root/build/uvcctl"
+identity="${WEBCAMBRIGHT_SIGN_IDENTITY:-}"
+if [[ -z "$identity" ]]; then
+  identity="-"
+  for candidate in "WebcamBright Release Signing" "WebcamBright Local Signing"; do
+    if security find-certificate -c "$candidate" >/dev/null 2>&1; then identity="$candidate"; break; fi
+  done
+fi
+# Hardened runtime: other processes can't inject code to borrow the app's camera permission.
+codesign --force --options runtime --sign "$identity" "$app/Contents/Resources/uvcctl" >/dev/null
+codesign --force --options runtime --entitlements app/WebcamBright.entitlements --sign "$identity" "$app" >/dev/null
+cp "$app/Contents/Resources/uvcctl" build/uvcctl
+echo "==> Done: $root/$app and $root/build/uvcctl (signed: $identity)"

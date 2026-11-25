@@ -1,0 +1,6 @@
+# The app has no dependencies; only the workflow actions are kept up to date.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule: { interval: weekly }

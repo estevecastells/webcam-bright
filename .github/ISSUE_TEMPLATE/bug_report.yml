@@ -1,0 +1,26 @@
+name: Bug report
+description: Something doesn't work as expected
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened, and what did you expect?
+    validations: { required: true }
+  - type: input
+    id: setup
+    attributes:
+      label: Camera, Mac and macOS version
+      description: "The first line of `uvcctl list`, `sysctl -n hw.model` and `sw_vers -productVersion`"
+      placeholder: HD Pro Webcam C920 / Mac17,9 / 27.2
+    validations: { required: true }
+  - type: input
+    id: light
+    attributes:
+      label: The light
+      placeholder: Daylight with a window behind me, a desk lamp, a dark room lit by the screen...
+  - type: textarea
+    id: log
+    attributes:
+      label: Relevant lines from ~/Library/Logs/webcam-bright.log
+      render: text

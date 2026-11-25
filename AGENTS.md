@@ -7,13 +7,15 @@ WebcamBright is a small macOS menu bar app. The Swift package is in `app/`:
   - `Levers.swift`: which camera control moves when, and the contrast/saturation tone. Pure logic, checked by KitChecks.
   - `Tuning.swift`: the camera's measured constants (exposure steps, gain limits, low-light mode).
   - `Settings.swift`: what the menu changes (target brightness, daylight contrast, anti-flicker), stored in UserDefaults.
+  - `Updater.swift`: release check, Ed25519 signature and checksum verification. `WebcamBrightUI/Updates.swift` downloads and installs, never during a call.
   - `Face.swift`, `CMIO.swift`, `Log.swift`, `Status.swift`.
 - `app/Sources/WebcamBrightUI/`: the SwiftUI panel, the menu bar icon and the app model.
 - `app/Sources/WebcamBright/`: the app entry point, with `--measure` and `--login-item-status`.
 - `app/Sources/CUVC/`: UVC camera controls over IOKit, in C. `app/Sources/uvcctl/` is the command line tool for them.
 - `app/Sources/KitChecks/`: checks for the lever logic and the settings, run with `make check`.
 - `app/Sources/RenderScreenshots/`: renders `docs/images/panel-*.png` from the real views (`make screenshots`).
-- `scripts/build-app.sh` builds `build/WebcamBright.app` (Info.plist and camera permission text included). `scripts/install.sh` installs it into /Applications. The `Makefile` wraps them.
+- `scripts/build-app.sh` builds `build/WebcamBright.app` (Info.plist, camera permission text, hardened runtime with `app/WebcamBright.entitlements`). `scripts/install.sh` installs it into /Applications. The `Makefile` wraps them.
+- Releases: `scripts/package-release.sh`, `scripts/sign-update.swift`, `scripts/get.sh` (the one-line installer) and `.github/workflows/release.yml`. See `docs/RELEASING.md`. Never print or commit the signing keys; they live in the login keychain and the repository secrets.
 
 ## Before you push
 

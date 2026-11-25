@@ -19,6 +19,7 @@ public final class AppModel {
     private(set) var openAtLogin = false
     private(set) var loginItemNeedsApproval = false
 
+    public let updates = Updates()
     private let engine: Engine?
     private var panelOpen = false
     private var windowObservers: [NSObjectProtocol] = []
@@ -41,6 +42,9 @@ public final class AppModel {
             pausedUntil = nil
         }
         engine.start(pausedUntil: pausedUntil)
+        // An update restarts the app, which hands the camera back for a moment: never during a call.
+        updates.isBusy = { [weak engine] in engine?.status.state == .inCall }
+        updates.start()
     }
 
     /// A static model for README screenshots: no engine, no camera.
